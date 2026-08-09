@@ -5,6 +5,8 @@ set -euo pipefail
 KERNEL_REPOSITORY="${KERNEL_REPOSITORY:-https://github.com/OnePlusOSS/android_kernel_common_oneplus_sm7675.git}"
 KERNEL_BRANCH="${KERNEL_BRANCH:-oneplus/sm7675_b_16.0.0_ace_3v}"
 ONEPLUS_REPOSITORY="${ONEPLUS_REPOSITORY:-https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm7675.git}"
+ANYKERNEL_REPOSITORY="${ANYKERNEL_REPOSITORY:-https://github.com/nothing-users/AnyKernel3-Nothing.git}"
+ANYKERNEL_BRANCH="${ANYKERNEL_BRANCH:-dontdelete}"
 CLANG_VERSION="${CLANG_VERSION:-clang-r487747c}"
 KSU_SETUP_URL="${KSU_SETUP_URL:-https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh}"
 KSU_REF="${KSU_REF:-dev}"
@@ -15,6 +17,7 @@ WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(dirname "$SCRIPT_DIR")}"
 KERNEL_DIR="${KERNEL_DIR:-$WORKSPACE_DIR/kernel_platform/common}"
 KERNEL_PLATFORM_DIR="$(dirname "$KERNEL_DIR")"
 ONEPLUS_SOURCE_DIR="${ONEPLUS_SOURCE_DIR:-$WORKSPACE_DIR/oneplus-source}"
+ANYKERNEL_DIR="${ANYKERNEL_DIR:-$WORKSPACE_DIR/AnyKernel3}"
 OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-$WORKSPACE_DIR/artifacts}"
 TOOLCHAIN_REPOSITORY_DIR="${TOOLCHAIN_REPOSITORY_DIR:-$WORKSPACE_DIR/toolchains/linux-x86}"
@@ -49,6 +52,7 @@ install_dependencies() {
         python3 \
         rsync \
         xz-utils \
+        zip \
         zstd
 }
 
@@ -116,6 +120,26 @@ sync_toolchain() {
         printf 'Clang toolchain not found: %s\n' "$TOOLCHAIN_DIR" >&2
         exit 1
     fi
+}
+
+sync_anykernel() {
+    if [ -d "$ANYKERNEL_DIR/.git" ]; then
+        local current_branch
+        current_branch="$(git -C "$ANYKERNEL_DIR" branch --show-current)"
+        if [ "$current_branch" != "$ANYKERNEL_BRANCH" ]; then
+            printf 'Expected AnyKernel3 branch %s, found %s\n' "$ANYKERNEL_BRANCH" "$current_branch" >&2
+            exit 1
+        fi
+        return
+    fi
+
+    if [ -e "$ANYKERNEL_DIR" ]; then
+        printf 'AnyKernel3 path exists and is not a Git repository: %s\n' "$ANYKERNEL_DIR" >&2
+        exit 1
+    fi
+
+    git clone --depth 1 --single-branch --branch "$ANYKERNEL_BRANCH" \
+        "$ANYKERNEL_REPOSITORY" "$ANYKERNEL_DIR"
 }
 
 setup_kernelsu() {
@@ -222,10 +246,26 @@ build_kernel() {
     sha256sum "$ARTIFACTS_DIR/Image" | tee "$ARTIFACTS_DIR/Image.sha256"
 }
 
+package_anykernel() {
+    local image="$ARTIFACTS_DIR/Image"
+    local package="$ARTIFACTS_DIR/ak3nthng-OnePlus-Ace-3V.zip"
+
+    if [ ! -s "$image" ]; then
+        printf 'Kernel Image is missing: %s\n' "$image" >&2
+        exit 1
+    fi
+
+    git -C "$ANYKERNEL_DIR" archive --format=zip --output="$package" HEAD
+    zip -j "$package" "$image"
+    sha256sum "$package" | tee "$package.sha256"
+}
+
 install_dependencies
 sync_kernel
 sync_oneplus_vendor
 sync_toolchain
+sync_anykernel
 setup_kernelsu
 apply_patches
 build_kernel
+package_anykernel
