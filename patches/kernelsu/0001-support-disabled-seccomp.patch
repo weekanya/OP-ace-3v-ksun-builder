@@ -1,0 +1,70 @@
+diff --git a/kernel/Kbuild b/kernel/Kbuild
+index cec135d..d8fe922 100644
+--- a/kernel/Kbuild
++++ b/kernel/Kbuild
+@@ -20,7 +20,7 @@ kernelsu-objs += extras.o
+ 
+ kernelsu-objs += infra/file_wrapper.o
+ kernelsu-objs += infra/event_queue.o
+-kernelsu-objs += infra/seccomp_cache.o
++kernelsu-$(CONFIG_SECCOMP_FILTER) += infra/seccomp_cache.o
+ kernelsu-objs += infra/su_mount_ns.o
+ kernelsu-objs += infra/symbol_resolver.o
+ 
+diff --git a/kernel/hook/setuid_hook.c b/kernel/hook/setuid_hook.c
+index 3cccc78..77e1691 100644
+--- a/kernel/hook/setuid_hook.c
++++ b/kernel/hook/setuid_hook.c
+@@ -28,10 +28,12 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+     pr_info("handle_setresuid from %d to %d\n", old_uid, new_uid);
+ 
+     if (unlikely(is_uid_manager(new_uid))) {
++#ifdef CONFIG_SECCOMP_FILTER
+         spin_lock_irq(&current->sighand->siglock);
+         ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
+-        ksu_set_task_tracepoint_flag(current);
+         spin_unlock_irq(&current->sighand->siglock);
++#endif
++        ksu_set_task_tracepoint_flag(current);
+ 
+         pr_info("install fd for manager: %d\n", new_uid);
+         ksu_install_fd();
+@@ -39,12 +41,14 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+     }
+ 
+     if (ksu_is_allow_uid_for_current(new_uid)) {
++#ifdef CONFIG_SECCOMP_FILTER
+         if (current->seccomp.mode == SECCOMP_MODE_FILTER &&
+             current->seccomp.filter) {
+             spin_lock_irq(&current->sighand->siglock);
+             ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
+             spin_unlock_irq(&current->sighand->siglock);
+         }
++#endif
+         ksu_set_task_tracepoint_flag(current);
+     } else {
+         ksu_clear_task_tracepoint_flag_if_needed(current);
+diff --git a/kernel/policy/app_profile.c b/kernel/policy/app_profile.c
+index ce086be..ce0dfb6 100644
+--- a/kernel/policy/app_profile.c
++++ b/kernel/policy/app_profile.c
+@@ -61,6 +61,7 @@ void setup_groups(struct root_profile *profile, struct cred *cred)
+     put_group_info(group_info);
+ }
+ 
++#ifdef CONFIG_SECCOMP_FILTER
+ void seccomp_filter_release(struct task_struct *tsk);
+ 
+ static void disable_seccomp(void)
+@@ -102,6 +103,11 @@ static void disable_seccomp(void)
+     seccomp_filter_release(fake);
+     kfree(fake);
+ }
++#else
++static void disable_seccomp(void)
++{
++}
++#endif
+ 
+ int escape_with_root_profile(void)
+ {
