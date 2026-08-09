@@ -4,6 +4,7 @@ set -euo pipefail
 
 KERNEL_REPOSITORY="${KERNEL_REPOSITORY:-https://github.com/OnePlusOSS/android_kernel_common_oneplus_sm7675.git}"
 KERNEL_BRANCH="${KERNEL_BRANCH:-oneplus/sm7675_b_16.0.0_ace_3v}"
+ONEPLUS_REPOSITORY="${ONEPLUS_REPOSITORY:-https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm7675.git}"
 CLANG_VERSION="${CLANG_VERSION:-clang-r487747c}"
 KSU_SETUP_URL="${KSU_SETUP_URL:-https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh}"
 KSU_REF="${KSU_REF:-dev}"
@@ -13,11 +14,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(dirname "$SCRIPT_DIR")}"
 KERNEL_DIR="${KERNEL_DIR:-$WORKSPACE_DIR/kernel_platform/common}"
 KERNEL_PLATFORM_DIR="$(dirname "$KERNEL_DIR")"
+ONEPLUS_SOURCE_DIR="${ONEPLUS_SOURCE_DIR:-$WORKSPACE_DIR/oneplus-source}"
 OUT_DIR="${OUT_DIR:-$KERNEL_DIR/out}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-$WORKSPACE_DIR/artifacts}"
 TOOLCHAIN_REPOSITORY_DIR="${TOOLCHAIN_REPOSITORY_DIR:-$WORKSPACE_DIR/toolchains/linux-x86}"
 TOOLCHAIN_DIR="$TOOLCHAIN_REPOSITORY_DIR/$CLANG_VERSION"
 CONFIG_FRAGMENT="${CONFIG_FRAGMENT:-$WORKSPACE_DIR/patches/kernel.config}"
+BBRV3_PATCH="${BBRV3_PATCH:-$WORKSPACE_DIR/patches/bbrv3/0001-net-tcp-backport-BBRv3-to-android14-6.1.patch}"
 
 install_dependencies() {
     if ! command -v apt-get >/dev/null 2>&1; then
@@ -69,6 +72,32 @@ sync_kernel() {
     git clone --depth 1 --single-branch --branch "$KERNEL_BRANCH" "$KERNEL_REPOSITORY" "$KERNEL_DIR"
 }
 
+sync_oneplus_vendor() {
+    if [ ! -d "$ONEPLUS_SOURCE_DIR/.git" ]; then
+        git clone --depth 1 --filter=blob:none --sparse --single-branch \
+            --branch "$KERNEL_BRANCH" "$ONEPLUS_REPOSITORY" "$ONEPLUS_SOURCE_DIR"
+    fi
+
+    git -C "$ONEPLUS_SOURCE_DIR" sparse-checkout set \
+        vendor/oplus/kernel/cpu \
+        vendor/oplus/kernel/storage \
+        vendor/oplus/kernel/oplus_performance_5.10/oplus_resctrl
+
+    if [ -L "$WORKSPACE_DIR/vendor" ]; then
+        if [ "$(readlink -f "$WORKSPACE_DIR/vendor")" != "$(readlink -f "$ONEPLUS_SOURCE_DIR/vendor")" ]; then
+            printf 'Vendor symlink points to an unexpected location: %s\n' "$WORKSPACE_DIR/vendor" >&2
+            exit 1
+        fi
+        return
+    fi
+    if [ -e "$WORKSPACE_DIR/vendor" ]; then
+        printf 'Vendor path exists and is not a symlink: %s\n' "$WORKSPACE_DIR/vendor" >&2
+        exit 1
+    fi
+
+    ln -s "$ONEPLUS_SOURCE_DIR/vendor" "$WORKSPACE_DIR/vendor"
+}
+
 sync_toolchain() {
     if [ -x "$TOOLCHAIN_DIR/bin/clang" ]; then
         return
@@ -102,6 +131,21 @@ setup_kernelsu() {
     fi
 }
 
+apply_patches() {
+    if [ ! -f "$BBRV3_PATCH" ]; then
+        printf 'BBRv3 patch not found: %s\n' "$BBRV3_PATCH" >&2
+        exit 1
+    fi
+
+    cd "$KERNEL_DIR"
+    if patch --dry-run --batch --reverse -p1 < "$BBRV3_PATCH" >/dev/null 2>&1; then
+        printf 'BBRv3 patch is already applied\n'
+        return
+    fi
+
+    patch --batch --forward -p1 < "$BBRV3_PATCH"
+}
+
 apply_config() {
     if [ ! -f "$CONFIG_FRAGMENT" ]; then
         printf 'Config fragment not found: %s\n' "$CONFIG_FRAGMENT" >&2
@@ -125,10 +169,17 @@ apply_config() {
 }
 
 verify_config() {
-    local entry
+    local entry expected option value
     while IFS= read -r entry || [ -n "$entry" ]; do
         [ -n "$entry" ] || continue
-        if ! grep -Fxq "$entry" "$OUT_DIR/.config"; then
+        option="${entry%%=*}"
+        value="${entry#*=}"
+        if [ "$value" = n ]; then
+            expected="# ${option} is not set"
+        else
+            expected="$entry"
+        fi
+        if ! grep -Fxq "$expected" "$OUT_DIR/.config"; then
             printf 'Required config was not enabled: %s\n' "$entry" >&2
             exit 1
         fi
@@ -173,6 +224,8 @@ build_kernel() {
 
 install_dependencies
 sync_kernel
+sync_oneplus_vendor
 sync_toolchain
 setup_kernelsu
+apply_patches
 build_kernel
