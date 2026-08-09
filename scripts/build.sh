@@ -168,6 +168,8 @@ sync_anykernel() {
             printf 'Expected AnyKernel3 branch %s, found %s\n' "$ANYKERNEL_BRANCH" "$current_branch" >&2
             exit 1
         fi
+        git -C "$ANYKERNEL_DIR" pull --ff-only origin "$ANYKERNEL_BRANCH"
+        printf 'Using AnyKernel3 commit: %s\n' "$(git -C "$ANYKERNEL_DIR" rev-parse --short HEAD)"
         return
     fi
 
@@ -178,6 +180,7 @@ sync_anykernel() {
 
     git clone --depth 1 --single-branch --branch "$ANYKERNEL_BRANCH" \
         "$ANYKERNEL_REPOSITORY" "$ANYKERNEL_DIR"
+    printf 'Using AnyKernel3 commit: %s\n' "$(git -C "$ANYKERNEL_DIR" rev-parse --short HEAD)"
 }
 
 setup_kernelsu() {
@@ -308,8 +311,8 @@ install_dependencies
 sync_kernel
 sync_oneplus_vendor
 sync_toolchain
-sync_anykernel
 setup_kernelsu
 apply_patches
 build_kernel
+sync_anykernel
 package_anykernel
