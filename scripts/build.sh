@@ -120,6 +120,7 @@ sync_oneplus_vendor() {
 
     git -C "$ONEPLUS_SOURCE_DIR" sparse-checkout set \
         vendor/oplus/kernel/cpu \
+        vendor/oplus/kernel/synchronize \
         vendor/oplus/kernel/storage \
         vendor/oplus/kernel/oplus_performance_5.10/oplus_resctrl
 
