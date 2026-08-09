@@ -14,10 +14,18 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    env:
+      CLANG_VERSION: clang-r487747c
 
     steps:
       - name: Checkout builder
         uses: actions/checkout@v4
+
+      - name: Restore Clang toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/toolchains/linux-x86/${{ env.CLANG_VERSION }}
+          key: clang-${{ runner.os }}-${{ runner.arch }}-${{ env.CLANG_VERSION }}
 
       - name: Build kernel
         run: ./scripts/build.sh
