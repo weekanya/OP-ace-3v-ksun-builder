@@ -25,6 +25,42 @@ TOOLCHAIN_DIR="$TOOLCHAIN_REPOSITORY_DIR/$CLANG_VERSION"
 CONFIG_FRAGMENT="${CONFIG_FRAGMENT:-$WORKSPACE_DIR/patches/kernel.config}"
 BBRV3_PATCH="${BBRV3_PATCH:-$WORKSPACE_DIR/patches/bbrv3/0001-net-tcp-backport-BBRv3-to-android14-6.1.patch}"
 
+report_failure() {
+    local status="$1"
+    local reject relative destination
+    local found=0
+    local failure_report="$ARTIFACTS_DIR/failure.log"
+
+    trap - EXIT
+    if [ "$status" -eq 0 ]; then
+        exit 0
+    fi
+
+    mkdir -p "$ARTIFACTS_DIR/rejects"
+    printf 'Build failed with exit code %s\n' "$status" > "$failure_report"
+
+    while IFS= read -r -d '' reject; do
+        found=1
+        relative="${reject#"$WORKSPACE_DIR/"}"
+        destination="$ARTIFACTS_DIR/rejects/$relative"
+        mkdir -p "$(dirname "$destination")"
+        cp "$reject" "$destination"
+        printf '\n===== %s =====\n' "$relative" >> "$failure_report"
+        cat "$reject" >> "$failure_report"
+    done < <(find "$WORKSPACE_DIR" \
+        \( -path "$WORKSPACE_DIR/.git" -o -path "$ARTIFACTS_DIR" \) -prune -o \
+        -type f -name '*.rej' -print0)
+
+    if [ "$found" -eq 0 ]; then
+        printf 'No .rej files found.\n' >> "$failure_report"
+    fi
+
+    cat "$failure_report" >&2
+    exit "$status"
+}
+
+trap 'report_failure "$?"' EXIT
+
 install_dependencies() {
     if ! command -v apt-get >/dev/null 2>&1; then
         return
@@ -261,6 +297,11 @@ package_anykernel() {
     zip -j "$package" "$image"
     sha256sum "$package" | tee "$package.sha256"
 }
+
+if [ "${1:-}" = sync-toolchain ]; then
+    sync_toolchain
+    exit 0
+fi
 
 install_dependencies
 sync_kernel

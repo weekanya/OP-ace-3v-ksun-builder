@@ -22,7 +22,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore Clang toolchain
-        uses: actions/cache@v4
+        id: clang-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/toolchains/linux-x86/${{ env.CLANG_VERSION }}
+          key: clang-${{ runner.os }}-${{ runner.arch }}-${{ env.CLANG_VERSION }}
+
+      - name: Download Clang toolchain
+        if: steps.clang-cache.outputs.cache-hit != 'true'
+        run: ./scripts/build.sh sync-toolchain
+
+      - name: Save Clang toolchain
+        if: steps.clang-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/toolchains/linux-x86/${{ env.CLANG_VERSION }}
           key: clang-${{ runner.os }}-${{ runner.arch }}-${{ env.CLANG_VERSION }}
