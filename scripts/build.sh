@@ -235,17 +235,19 @@ apply_config() {
 }
 
 verify_config() {
-    local entry expected option value
+    local entry option value
     while IFS= read -r entry || [ -n "$entry" ]; do
         [ -n "$entry" ] || continue
         option="${entry%%=*}"
         value="${entry#*=}"
         if [ "$value" = n ]; then
-            expected="# ${option} is not set"
-        else
-            expected="$entry"
+            if grep -q "^${option}=" "$OUT_DIR/.config"; then
+                printf 'Required config was not disabled: %s\n' "$entry" >&2
+                exit 1
+            fi
+            continue
         fi
-        if ! grep -Fxq "$expected" "$OUT_DIR/.config"; then
+        if ! grep -Fxq "$entry" "$OUT_DIR/.config"; then
             printf 'Required config was not enabled: %s\n' "$entry" >&2
             exit 1
         fi
