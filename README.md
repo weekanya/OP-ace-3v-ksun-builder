@@ -1,28 +1,28 @@
 # OnePlus Ace 3V Kernel Builder
 
-Сборщик ядра для OnePlus Ace 3V на базе официальных исходников OnePlus.
+Kernel builder for the OnePlus Ace 3V based on the official OnePlus kernel sources.
 
-## Что включено
+## Features
 
-- KernelSU Next из ветки `dev`
+- KernelSU Next from the `dev` branch
 - BBRv3
-- планировщики FQ и CAKE
+- FQ and CAKE queue schedulers
 - ThinLTO
-- ZRAM с ZSTD
-- сборка установочного архива AnyKernel3
-- кэширование Clang в GitHub Actions
+- ZRAM with ZSTD
+- AnyKernel3 flashable package
+- Clang caching in GitHub Actions
 
-## Сборка
+## Building
 
-Сборка запускается вручную через workflow `Build OnePlus Ace 3V Kernel` в GitHub Actions.
+Run the `Build OnePlus Ace 3V Kernel` workflow manually in GitHub Actions.
 
-Для локального запуска:
+For a local build:
 
 ```bash
 ./scripts/build.sh
 ```
 
-Готовые файлы сохраняются в каталоге `artifacts`:
+Build outputs are saved in the `artifacts` directory:
 
 - `Image`
 - `Image.sha256`
@@ -30,4 +30,4 @@
 - `ak3nthng-OnePlus-Ace-3V.zip.sha256`
 - `build.log`
 
-При ошибке сборки дополнительно сохраняются `failure.log` и найденные файлы `*.rej`.
+If the build fails, `failure.log` and any `*.rej` files are saved as well.
