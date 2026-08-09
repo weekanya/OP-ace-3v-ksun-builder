@@ -109,7 +109,8 @@ sync_toolchain() {
 
     if [ ! -d "$TOOLCHAIN_REPOSITORY_DIR/.git" ]; then
         mkdir -p "$(dirname "$TOOLCHAIN_REPOSITORY_DIR")"
-        git clone --depth 1 --filter=blob:none --sparse --branch main \
+        git clone --depth 1 --filter=blob:none --sparse \
+            --branch android-14.0.0_r18 \
             https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
             "$TOOLCHAIN_REPOSITORY_DIR"
     fi
