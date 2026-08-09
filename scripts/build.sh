@@ -163,12 +163,13 @@ apply_patches() {
     fi
 
     cd "$KERNEL_DIR"
-    if patch --dry-run --batch --reverse -p1 < "$BBRV3_PATCH" >/dev/null 2>&1; then
+    if git apply --reverse --check "$BBRV3_PATCH" >/dev/null 2>&1; then
         printf 'BBRv3 patch is already applied\n'
         return
     fi
 
-    patch --batch --forward -p1 < "$BBRV3_PATCH"
+    git apply --check "$BBRV3_PATCH"
+    git apply "$BBRV3_PATCH"
 }
 
 apply_config() {
