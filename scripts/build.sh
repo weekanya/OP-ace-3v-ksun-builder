@@ -6,7 +6,8 @@ KERNEL_REPOSITORY="${KERNEL_REPOSITORY:-https://github.com/OnePlusOSS/android_ke
 KERNEL_BRANCH="${KERNEL_BRANCH:-oneplus/sm7675_b_16.0.0_ace_3v}"
 CLANG_VERSION="${CLANG_VERSION:-clang-r487747c}"
 KSU_SETUP_URL="${KSU_SETUP_URL:-https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh}"
-KSU_REF="${KSU_REF:-}"
+KSU_REF="${KSU_REF:-dev}"
+LOCAL_VERSION="${LOCAL_VERSION:--wee}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(dirname "$SCRIPT_DIR")}"
@@ -92,13 +93,8 @@ setup_kernelsu() {
     local setup_script="${RUNNER_TEMP:-/tmp}/kernelsu-next-setup.sh"
     curl --fail --location --proto '=https' "$KSU_SETUP_URL" -o "$setup_script"
 
-    if [ -n "$KSU_REF" ]; then
-        cd "$KERNEL_PLATFORM_DIR"
-        bash "$setup_script" "$KSU_REF"
-    else
-        cd "$KERNEL_PLATFORM_DIR"
-        bash "$setup_script"
-    fi
+    cd "$KERNEL_PLATFORM_DIR"
+    bash "$setup_script" "$KSU_REF"
 
     if [ ! -L "$KERNEL_DIR/drivers/kernelsu" ]; then
         printf 'KernelSU Next was not integrated into the kernel tree\n' >&2
@@ -147,16 +143,22 @@ build_kernel() {
     export SUBARCH=arm64
     export LLVM=1
     export LLVM_IAS=1
-    export KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-OnePlus}"
-    export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-ace-3v}"
+    export KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-wee}"
+    export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-wee}"
     export KBUILD_BUILD_TIMESTAMP="${KBUILD_BUILD_TIMESTAMP:-$(git -C "$KERNEL_DIR" log -1 --format=%cD)}"
 
     : > "$KERNEL_DIR/.scmversion"
 
     make -C "$KERNEL_DIR" O="$OUT_DIR" gki_defconfig
     apply_config
+    "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" --set-str LOCALVERSION "$LOCAL_VERSION"
+    "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" -d LOCALVERSION_AUTO
     make -C "$KERNEL_DIR" O="$OUT_DIR" olddefconfig
     verify_config
+    if ! grep -Fxq "CONFIG_LOCALVERSION=\"$LOCAL_VERSION\"" "$OUT_DIR/.config"; then
+        printf 'Local version was not applied: %s\n' "$LOCAL_VERSION" >&2
+        exit 1
+    fi
     make -C "$KERNEL_DIR" O="$OUT_DIR" -j"$(nproc --all)" Image 2>&1 | tee "$ARTIFACTS_DIR/build.log"
 
     local image="$OUT_DIR/arch/arm64/boot/Image"
