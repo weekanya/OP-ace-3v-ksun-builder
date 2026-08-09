@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build kernel
-        run: ./build.sh
+        run: ./scripts/build.sh
 
       - name: Upload kernel
         if: always()
