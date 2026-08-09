@@ -290,7 +290,7 @@ build_kernel() {
 
 package_anykernel() {
     local image="$ARTIFACTS_DIR/Image"
-    local package="$ARTIFACTS_DIR/ak3nthng-OnePlus-Ace-3V.zip"
+    local package="$ARTIFACTS_DIR/OnePlus-Ace-3V.zip"
 
     if [ ! -s "$image" ]; then
         printf 'Kernel Image is missing: %s\n' "$image" >&2

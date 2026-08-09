@@ -26,8 +26,8 @@ Build outputs are saved in the `artifacts` directory:
 
 - `Image`
 - `Image.sha256`
-- `ak3nthng-OnePlus-Ace-3V.zip`
-- `ak3nthng-OnePlus-Ace-3V.zip.sha256`
+- `OnePlus-Ace-3V.zip`
+- `OnePlus-Ace-3V.zip.sha256`
 - `build.log`
 
 If the build fails, `failure.log` and any `*.rej` files are saved as well.

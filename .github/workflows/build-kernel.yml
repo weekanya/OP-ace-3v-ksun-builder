@@ -42,11 +42,22 @@ jobs:
       - name: Build kernel
         run: ./scripts/build.sh
 
-      - name: Upload kernel
+      - name: Upload build files
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: OnePlus-Ace-3V-kernel
-          path: artifacts
+          name: OnePlus-Ace-3V-build-files
+          path: |
+            artifacts/**
+            !artifacts/OnePlus-Ace-3V.zip
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload AnyKernel3 package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnePlus-Ace-3V-AnyKernel3
+          path: artifacts/OnePlus-Ace-3V.zip
           if-no-files-found: warn
           retention-days: 7
