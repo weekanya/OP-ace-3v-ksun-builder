@@ -24,7 +24,6 @@ TOOLCHAIN_REPOSITORY_DIR="${TOOLCHAIN_REPOSITORY_DIR:-$WORKSPACE_DIR/toolchains/
 TOOLCHAIN_DIR="$TOOLCHAIN_REPOSITORY_DIR/$CLANG_VERSION"
 CONFIG_FRAGMENT="${CONFIG_FRAGMENT:-$WORKSPACE_DIR/patches/kernel.config}"
 BBRV3_PATCH="${BBRV3_PATCH:-$WORKSPACE_DIR/patches/bbrv3/0001-net-tcp-backport-BBRv3-to-android14-6.1.patch}"
-KSU_SECCOMP_PATCH="${KSU_SECCOMP_PATCH:-$WORKSPACE_DIR/patches/kernelsu/0001-support-disabled-seccomp.patch}"
 
 report_failure() {
     local status="$1"
@@ -197,30 +196,20 @@ setup_kernelsu() {
     fi
 }
 
-apply_git_patch() {
-    local repository="$1"
-    local patch_file="$2"
-    local name="$3"
-
-    if [ ! -f "$patch_file" ]; then
-        printf '%s patch not found: %s\n' "$name" "$patch_file" >&2
+apply_patches() {
+    if [ ! -f "$BBRV3_PATCH" ]; then
+        printf 'BBRv3 patch not found: %s\n' "$BBRV3_PATCH" >&2
         exit 1
     fi
 
-    if git -C "$repository" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
-        printf '%s patch is already applied\n' "$name"
+    cd "$KERNEL_DIR"
+    if git apply --reverse --check "$BBRV3_PATCH" >/dev/null 2>&1; then
+        printf 'BBRv3 patch is already applied\n'
         return
     fi
 
-    git -C "$repository" apply --check "$patch_file"
-    git -C "$repository" apply "$patch_file"
-}
-
-apply_patches() {
-    local ksu_repository
-    ksu_repository="$(git -C "$KERNEL_DIR/drivers/kernelsu" rev-parse --show-toplevel)"
-    apply_git_patch "$KERNEL_DIR" "$BBRV3_PATCH" BBRv3
-    apply_git_patch "$ksu_repository" "$KSU_SECCOMP_PATCH" "KernelSU seccomp compatibility"
+    git apply --check "$BBRV3_PATCH"
+    git apply "$BBRV3_PATCH"
 }
 
 apply_config() {
