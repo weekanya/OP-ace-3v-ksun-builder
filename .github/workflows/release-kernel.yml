@@ -1,21 +1,29 @@
-name: Build OnePlus Ace 3V Kernel
+name: Weekly Release OnePlus Ace 3V Kernel
 
 on:
+  schedule:
+    - cron: '0 3 * * 0' # Runs every Sunday at 03:00 UTC
   workflow_dispatch:
+    inputs:
+      custom_tag:
+        description: 'Custom tag name (optional, defaults to vYYYY.MM.DD)'
+        required: false
+        default: ''
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: ace-3v-kernel-${{ github.ref }}
+  group: ace-3v-kernel-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       CLANG_VERSION: clang-r487747c
+      USE_CCACHE: "1"
 
     steps:
       - name: Checkout builder
@@ -43,13 +51,39 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ccache-${{ runner.os }}-${{ github.ref }}-${{ github.sha }}
+          key: ccache-${{ runner.os }}-release-${{ github.sha }}
           restore-keys: |
-            ccache-${{ runner.os }}-${{ github.ref }}-
+            ccache-${{ runner.os }}-release-
             ccache-${{ runner.os }}-
 
       - name: Build kernel
         run: ./scripts/build.sh
+
+      - name: Determine Release Tag and Title
+        id: release-info
+        run: |
+          if [ -n "${{ github.event.inputs.custom_tag }}" ]; then
+            TAG_NAME="${{ github.event.inputs.custom_tag }}"
+          else
+            TAG_NAME="v$(date +'%Y.%m.%d')"
+          fi
+          RELEASE_TITLE="OnePlus Ace 3V Kernel (${TAG_NAME})"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_title=${RELEASE_TITLE}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.release-info.outputs.tag_name }}
+          RELEASE_TITLE: ${{ steps.release-info.outputs.release_title }}
+        run: |
+          gh release create "$TAG_NAME" \
+            artifacts/OnePlus-Ace-3V.zip \
+            artifacts/OnePlus-Ace-3V.zip.sha256 \
+            artifacts/Image \
+            artifacts/Image.sha256 \
+            --title "$RELEASE_TITLE" \
+            --notes-file artifacts/release_notes.md
 
       - name: Upload build files
         if: always()
@@ -60,7 +94,7 @@ jobs:
             artifacts/**
             !artifacts/OnePlus-Ace-3V.zip
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
 
       - name: Upload AnyKernel3 package
         if: always()
@@ -69,4 +103,4 @@ jobs:
           name: OnePlus-Ace-3V-AnyKernel3
           path: artifacts/OnePlus-Ace-3V.zip
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14

@@ -5,18 +5,24 @@ Kernel builder for the OnePlus Ace 3V based on the official OnePlus kernel sourc
 ## Features
 
 - KernelSU Next from the `dev` branch
-- BBRv3
+- BBRv3 TCP congestion control
 - FQ and CAKE queue schedulers
 - ThinLTO
-- ZRAM with ZSTD
+- Multi-Gen LRU (MGLRU)
+- ZRAM with ZSTD compression
+- CCache compilation acceleration
 - AnyKernel3 flashable package
-- Clang caching in GitHub Actions
+- Clang toolchain and CCache caching in GitHub Actions
+- Weekly automated GitHub Releases with full build metadata
 
 ## Building
 
-Run the `Build OnePlus Ace 3V Kernel` workflow manually in GitHub Actions.
+### GitHub Actions
 
-For a local build:
+- **Build OnePlus Ace 3V Kernel**: Manual workflow (`workflow_dispatch`) for testing builds and creating artifacts.
+- **Weekly Release OnePlus Ace 3V Kernel**: Runs automatically every Sunday at 03:00 UTC (or manually via `workflow_dispatch`) to compile the kernel and publish a GitHub Release with detailed release notes and flashable packages.
+
+### Local Build
 
 ```bash
 ./scripts/build.sh
@@ -28,6 +34,7 @@ Build outputs are saved in the `artifacts` directory:
 - `Image.sha256`
 - `OnePlus-Ace-3V.zip`
 - `OnePlus-Ace-3V.zip.sha256`
+- `release_notes.md`
 - `build.log`
 
 If the build fails, `failure.log` and any `*.rej` files are saved as well.

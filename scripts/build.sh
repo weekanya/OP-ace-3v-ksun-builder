@@ -11,6 +11,9 @@ CLANG_VERSION="${CLANG_VERSION:-clang-r487747c}"
 KSU_SETUP_URL="${KSU_SETUP_URL:-https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh}"
 KSU_REF="${KSU_REF:-dev}"
 LOCAL_VERSION="${LOCAL_VERSION:--wee}"
+USE_CCACHE="${USE_CCACHE:-1}"
+CCACHE_DIR="${CCACHE_DIR:-$WORKSPACE_DIR/.ccache}"
+CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(dirname "$SCRIPT_DIR")}"
@@ -76,6 +79,7 @@ install_dependencies() {
         bc \
         bison \
         build-essential \
+        ccache \
         cpio \
         curl \
         device-tree-compiler \
@@ -252,7 +256,6 @@ verify_config() {
             exit 1
         fi
     done < "$CONFIG_FRAGMENT"
-
 }
 
 build_kernel() {
@@ -266,6 +269,18 @@ build_kernel() {
     export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-wee}"
     export KBUILD_BUILD_TIMESTAMP="${KBUILD_BUILD_TIMESTAMP:-$(git -C "$KERNEL_DIR" log -1 --format=%cD)}"
 
+    local make_extra_args=()
+    if [ "$USE_CCACHE" = "1" ] && command -v ccache >/dev/null 2>&1; then
+        export CCACHE_DIR="$CCACHE_DIR"
+        export CCACHE_MAXSIZE="$CCACHE_MAXSIZE"
+        export CCACHE_COMPRESS=1
+        mkdir -p "$CCACHE_DIR"
+        ccache -M "$CCACHE_MAXSIZE" >/dev/null 2>&1 || true
+        ccache -z >/dev/null 2>&1 || true
+        printf 'CCache enabled (dir: %s, max size: %s)\n' "$CCACHE_DIR" "$CCACHE_MAXSIZE"
+        make_extra_args+=(CC="ccache clang" HOSTCC="ccache clang")
+    fi
+
     : > "$KERNEL_DIR/.scmversion"
 
     make -C "$KERNEL_DIR" O="$OUT_DIR" gki_defconfig
@@ -278,7 +293,12 @@ build_kernel() {
         printf 'Local version was not applied: %s\n' "$LOCAL_VERSION" >&2
         exit 1
     fi
-    make -C "$KERNEL_DIR" O="$OUT_DIR" -j"$(nproc --all)" Image 2>&1 | tee "$ARTIFACTS_DIR/build.log"
+    make -C "$KERNEL_DIR" O="$OUT_DIR" -j"$(nproc --all)" "${make_extra_args[@]}" Image 2>&1 | tee "$ARTIFACTS_DIR/build.log"
+
+    if [ "$USE_CCACHE" = "1" ] && command -v ccache >/dev/null 2>&1; then
+        printf '\n--- CCache Statistics ---\n'
+        ccache -s || true
+    fi
 
     local image="$OUT_DIR/arch/arm64/boot/Image"
     if [ ! -s "$image" ]; then
@@ -304,6 +324,96 @@ package_anykernel() {
     sha256sum "$package" | tee "$package.sha256"
 }
 
+generate_release_notes() {
+    local notes="$ARTIFACTS_DIR/release_notes.md"
+    local image="$ARTIFACTS_DIR/Image"
+    local package="$ARTIFACTS_DIR/OnePlus-Ace-3V.zip"
+    local build_time
+    build_time="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
+    local kernel_ver="6.1"
+    if [ -f "$OUT_DIR/include/config/kernel.release" ]; then
+        kernel_ver="$(cat "$OUT_DIR/include/config/kernel.release")"
+    elif command -v make >/dev/null 2>&1; then
+        kernel_ver="$(make -s -C "$KERNEL_DIR" O="$OUT_DIR" kernelrelease 2>/dev/null || echo "6.1")"
+    fi
+
+    local kernel_commit="unknown"
+    local kernel_commit_msg=""
+    if [ -d "$KERNEL_DIR/.git" ]; then
+        kernel_commit="$(git -C "$KERNEL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+        kernel_commit_msg="$(git -C "$KERNEL_DIR" log -1 --pretty=format:"%s" 2>/dev/null || echo "")"
+    fi
+
+    local ksu_commit="unknown"
+    local ksu_desc="$KSU_REF"
+    local target_ksu_dir=""
+    if [ -d "$KERNEL_PLATFORM_DIR/KernelSU-Next/.git" ]; then
+        target_ksu_dir="$KERNEL_PLATFORM_DIR/KernelSU-Next"
+    elif [ -d "$KERNEL_DIR/drivers/kernelsu/.git" ] || [ -f "$KERNEL_DIR/drivers/kernelsu/.git" ]; then
+        target_ksu_dir="$KERNEL_DIR/drivers/kernelsu"
+    fi
+
+    if [ -n "$target_ksu_dir" ]; then
+        ksu_commit="$(git -C "$target_ksu_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+        ksu_desc="$(git -C "$target_ksu_dir" describe --tags --always 2>/dev/null || echo "$KSU_REF")"
+    fi
+
+    local clang_info="$CLANG_VERSION"
+    if [ -x "$TOOLCHAIN_DIR/bin/clang" ]; then
+        clang_info="$("$TOOLCHAIN_DIR/bin/clang" --version 2>/dev/null | head -n 1 || echo "$CLANG_VERSION")"
+    fi
+
+    local zip_hash="N/A"
+    local image_hash="N/A"
+    [ -f "$package.sha256" ] && zip_hash="$(awk '{print $1}' "$package.sha256")"
+    [ -f "$image.sha256" ] && image_hash="$(awk '{print $1}' "$image.sha256")"
+
+    cat <<EOF > "$notes"
+# OnePlus Ace 3V Kernel Release
+
+Custom Linux GKI kernel for **OnePlus Ace 3V** (\`SM7675\` / \`PJF110\`).
+
+## 📋 Build Information
+
+| Component | Details |
+| :--- | :--- |
+| **Linux Kernel Release** | \`$kernel_ver\` |
+| **Base Kernel Branch** | [\`$KERNEL_BRANCH\`]($KERNEL_REPOSITORY) (\`$kernel_commit\`) |
+| **Base Commit Message** | \`$kernel_commit_msg\` |
+| **KernelSU Next** | Branch/Ref: \`$KSU_REF\` \| Version/Commit: \`$ksu_desc\` (\`$ksu_commit\`) |
+| **Compiler Toolchain** | \`$clang_info\` |
+| **Local Version** | \`$LOCAL_VERSION\` |
+| **Build Timestamp** | \`$build_time\` |
+
+## ✨ Features & Optimizations
+
+- 🛡️ **KernelSU Next**: Integrated from \`$KSU_REF\` branch with support for root and GKI modules.
+- 🚀 **TCP BBRv3**: Backported Google BBRv3 congestion control for high throughput and minimal latency.
+- 🌐 **Queue Schedulers**: **FQ** and **CAKE** queue disciplines enabled.
+- ⚡ **ZRAM + ZSTD**: Swap memory compression via Zstandard for fast paging and high compression ratio.
+- 🧠 **Multi-Gen LRU (MGLRU)**: \`CONFIG_LRU_GEN=y\` for optimized memory reclamation.
+- ⚙️ **ThinLTO**: Clang Thin Link-Time Optimization enabled.
+- 📦 **AnyKernel3**: Flashable zip package for Recovery / Kernel Flasher.
+
+## 📦 Files & Checksums
+
+| File | SHA-256 Checksum |
+| :--- | :--- |
+| \`OnePlus-Ace-3V.zip\` | \`$zip_hash\` |
+| \`Image\` | \`$image_hash\` |
+
+## 📲 Installation
+
+1. Download **\`OnePlus-Ace-3V.zip\`**.
+2. Flash the zip via **Kernel Flasher** app (recommended) or custom recovery (TWRP/OrangeFox).
+3. Reboot device.
+4. Install the latest [KernelSU Next Manager APK](https://github.com/KernelSU-Next/KernelSU-Next/releases).
+EOF
+
+    printf 'Release notes generated at: %s\n' "$notes"
+}
+
 if [ "${1:-}" = sync-toolchain ]; then
     sync_toolchain
     exit 0
@@ -318,3 +428,5 @@ apply_patches
 build_kernel
 sync_anykernel
 package_anykernel
+generate_release_notes
+
