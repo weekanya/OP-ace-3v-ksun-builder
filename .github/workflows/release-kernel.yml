@@ -24,6 +24,8 @@ jobs:
     env:
       CLANG_VERSION: clang-r487747c
       USE_CCACHE: "1"
+      KBUILD_BUILD_USER: wee
+      KBUILD_BUILD_HOST: wee
 
     steps:
       - name: Checkout builder

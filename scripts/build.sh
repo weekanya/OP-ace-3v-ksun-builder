@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(dirname "$SCRIPT_DIR")}"
+
 KERNEL_REPOSITORY="${KERNEL_REPOSITORY:-https://github.com/OnePlusOSS/android_kernel_common_oneplus_sm7675.git}"
 KERNEL_BRANCH="${KERNEL_BRANCH:-oneplus/sm7675_b_16.0.0_ace_3v}"
 ONEPLUS_REPOSITORY="${ONEPLUS_REPOSITORY:-https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm7675.git}"
@@ -11,12 +14,12 @@ CLANG_VERSION="${CLANG_VERSION:-clang-r487747c}"
 KSU_SETUP_URL="${KSU_SETUP_URL:-https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh}"
 KSU_REF="${KSU_REF:-dev}"
 LOCAL_VERSION="${LOCAL_VERSION:--wee}"
+KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-wee}"
+KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-wee}"
 USE_CCACHE="${USE_CCACHE:-1}"
 CCACHE_DIR="${CCACHE_DIR:-$WORKSPACE_DIR/.ccache}"
 CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(dirname "$SCRIPT_DIR")}"
 KERNEL_DIR="${KERNEL_DIR:-$WORKSPACE_DIR/kernel_platform/common}"
 KERNEL_PLATFORM_DIR="$(dirname "$KERNEL_DIR")"
 ONEPLUS_SOURCE_DIR="${ONEPLUS_SOURCE_DIR:-$WORKSPACE_DIR/oneplus-source}"
