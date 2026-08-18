@@ -4,7 +4,7 @@ Kernel builder for the OnePlus Ace 3V based on the official OnePlus kernel sourc
 
 ## Features
 
-- KernelSU Next from the `dev` branch
+- KernelSU Next from the `dev` branch with dual manager signature support (Official + Custom signed manager)
 - BBRv3 TCP congestion control
 - FQ and CAKE queue schedulers
 - ThinLTO

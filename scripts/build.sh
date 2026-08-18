@@ -13,6 +13,8 @@ ANYKERNEL_BRANCH="${ANYKERNEL_BRANCH:-dontdelete}"
 CLANG_VERSION="${CLANG_VERSION:-clang-r487747c}"
 KSU_SETUP_URL="${KSU_SETUP_URL:-https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh}"
 KSU_REF="${KSU_REF:-dev}"
+CUSTOM_MANAGER_SIZE="${CUSTOM_MANAGER_SIZE:-0x387}"
+CUSTOM_MANAGER_HASH="${CUSTOM_MANAGER_HASH:-48a36d86b8a32c4317fd021c6d1ab324c1644a4234c0df4bc04dde4f3a2bffe9}" 
 LOCAL_VERSION="${LOCAL_VERSION:--wee}"
 KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-wee}"
 KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-wee}"
@@ -201,6 +203,22 @@ setup_kernelsu() {
         printf 'KernelSU Next was not integrated into the kernel tree\n' >&2
         exit 1
     fi
+
+    local ksu_sign_files=(
+        "$KERNEL_DIR/drivers/kernelsu/kernel/manager/apk_sign.c"
+        "$KERNEL_PLATFORM_DIR/KernelSU-Next/kernel/manager/apk_sign.c"
+    )
+    for ksu_sign_c in "${ksu_sign_files[@]}"; do
+        if [ -f "$ksu_sign_c" ] && [ -n "$CUSTOM_MANAGER_HASH" ]; then
+            if ! grep -q "$CUSTOM_MANAGER_HASH" "$ksu_sign_c"; then
+                sed -i "/return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);/i \\
+	if (check_v2_signature(path, $CUSTOM_MANAGER_SIZE, \"$CUSTOM_MANAGER_HASH\")) {\\
+		return true;\\
+	}" "$ksu_sign_c"
+                printf 'Added custom manager signature (%s, %s) to %s\n' "$CUSTOM_MANAGER_SIZE" "$CUSTOM_MANAGER_HASH" "$ksu_sign_c"
+            fi
+        fi
+    done
 }
 
 apply_patches() {
